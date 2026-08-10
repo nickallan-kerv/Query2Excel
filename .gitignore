@@ -1,0 +1,2 @@
+# Prevent local secrets from being committed
+Query2Excel.App/appsettings.json
