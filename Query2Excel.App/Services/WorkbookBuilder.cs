@@ -8,10 +8,6 @@ namespace Query2Excel.App.Services;
 
 public sealed class WorkbookBuilder(ILogger<WorkbookBuilder> logger) : IWorkbookBuilder
 {
-    private const string SheetNameMetadataField = "__SheetName";
-    private const string TitleMetadataField = "__Title";
-    private const string DescriptionMetadataField = "__Description";
-
     public Task BuildWorkbookAsync(QueryExecutionResult result, string outputFilePath, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(result);
@@ -54,18 +50,18 @@ public sealed class WorkbookBuilder(ILogger<WorkbookBuilder> logger) : IWorkbook
         }
 
         var outputIndex = 1;
-        WorksheetMetadata? pendingMetadata = null;
+        OutputWorksheetMetadata? pendingMetadata = null;
 
         foreach (var resultSet in resultSets)
         {
-            if (TryReadMetadata(resultSet, out var metadata))
+            if (OutputWorksheetMetadataParser.TryParse(resultSet, out var metadata))
             {
                 pendingMetadata = metadata;
                 continue;
             }
 
             var defaultName = $"Output{outputIndex}";
-            var requestedName = string.IsNullOrWhiteSpace(pendingMetadata?.SheetName) ? defaultName : pendingMetadata.Value.SheetName;
+            var requestedName = string.IsNullOrWhiteSpace(pendingMetadata?.SheetName) ? defaultName : pendingMetadata.SheetName;
             var worksheetName = ResolveWorksheetName(workbook, requestedName, defaultName);
 
             BuildSingleOutputWorksheet(workbook, resultSet, worksheetName, outputIndex, pendingMetadata?.Title, pendingMetadata?.Description);
@@ -157,54 +153,6 @@ public sealed class WorkbookBuilder(ILogger<WorkbookBuilder> logger) : IWorkbook
         worksheet.SheetView.FreezeRows(tableHeaderRow);
     }
 
-    private static bool TryReadMetadata(DataTable resultSet, out WorksheetMetadata metadata)
-    {
-        metadata = default;
-
-        if (resultSet.Rows.Count != 1 || resultSet.Columns.Count == 0)
-        {
-            return false;
-        }
-
-        foreach (DataColumn column in resultSet.Columns)
-        {
-            if (!IsRecognizedMetadataField(column.ColumnName))
-            {
-                return false;
-            }
-        }
-
-        var row = resultSet.Rows[0];
-        var sheetName = GetMetadataValue(row, SheetNameMetadataField);
-        var title = GetMetadataValue(row, TitleMetadataField);
-        var description = GetMetadataValue(row, DescriptionMetadataField);
-
-        metadata = new WorksheetMetadata(sheetName, title, description);
-        return true;
-    }
-
-    private static bool IsRecognizedMetadataField(string columnName)
-    {
-        return string.Equals(columnName, SheetNameMetadataField, StringComparison.OrdinalIgnoreCase)
-            || string.Equals(columnName, TitleMetadataField, StringComparison.OrdinalIgnoreCase)
-            || string.Equals(columnName, DescriptionMetadataField, StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static string? GetMetadataValue(DataRow row, string fieldName)
-    {
-        foreach (DataColumn column in row.Table.Columns)
-        {
-            if (!string.Equals(column.ColumnName, fieldName, StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
-            return row[column] == DBNull.Value ? null : row[column]?.ToString();
-        }
-
-        return null;
-    }
-
     private static string ResolveWorksheetName(XLWorkbook workbook, string? requestedName, string fallbackName)
     {
         var baseName = string.IsNullOrWhiteSpace(requestedName)
@@ -263,8 +211,6 @@ public sealed class WorkbookBuilder(ILogger<WorkbookBuilder> logger) : IWorkbook
         cell.Style.Font.FontName = "Calibri";
         cell.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
     }
-
-    private readonly record struct WorksheetMetadata(string? SheetName, string? Title, string? Description);
 
     private static void SetCellValue(IXLCell cell, object value)
     {
