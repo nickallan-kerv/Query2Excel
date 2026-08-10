@@ -1,2 +1,15 @@
-# Prevent local secrets from being committed
+# Build artifacts
+**/bin/
+**/obj/
+
+# User/IDE files
+.vs/
+*.user
+*.suo
+
+# Test and tool outputs
+TestResults/
+*.trx
+
+# Local app configuration (contains environment-specific values)
 Query2Excel.App/appsettings.json
