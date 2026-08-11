@@ -1,0 +1,56 @@
+{
+  "Query2Excel": {
+    "RowStyles": {
+      "Good": {
+        "BackgroundColor": "#C6EFCE",
+        "ForegroundColor": "#006100"
+      },
+      "Bad": {
+        "BackgroundColor": "#FFC7CE",
+        "ForegroundColor": "#9C0006"
+      },
+      "Neutral": {
+        "BackgroundColor": "#FFEB9C",
+        "ForegroundColor": "#9C5700"
+      },
+      "Check Cell": {
+        "BackgroundColor": "#E2EFDA",
+        "ForegroundColor": "#375623"
+      },
+      "Accent1": {
+        "BackgroundColor": "#DCE6F1",
+        "ForegroundColor": "#000000"
+      },
+      "Accent2": {
+        "BackgroundColor": "#F2DCDB",
+        "ForegroundColor": "#000000"
+      },
+      "Accent3": {
+        "BackgroundColor": "#EBF1DE",
+        "ForegroundColor": "#000000"
+      },
+      "Accent4": {
+        "BackgroundColor": "#E4DFEC",
+        "ForegroundColor": "#000000"
+      },
+      "Accent5": {
+        "BackgroundColor": "#DAEEF3",
+        "ForegroundColor": "#000000"
+      },
+      "Accent6": {
+        "BackgroundColor": "#FDE9D9",
+        "ForegroundColor": "#000000"
+      },
+      "Heading 1": {
+        "BackgroundColor": "#1F4E78",
+        "ForegroundColor": "#FFFFFF",
+        "Bold": true,
+        "FontSize": 12
+      },
+      "Currency": {
+        "NumberFormat": "£#,##0.00",
+        "NumberFormatNumericOnly": true
+      }
+    }
+  }
+}
