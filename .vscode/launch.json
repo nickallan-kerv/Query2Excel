@@ -1,0 +1,38 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run Console (Query2Excel.App)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build Query2Excel.App",
+      "program": "${workspaceFolder}/Query2Excel.App/bin/Debug/net8.0/Query2Excel.App.dll",
+      "cwd": "${workspaceFolder}",
+      "stopAtEntry": false,
+      "console": "integratedTerminal",
+      "args": []
+    },
+    {
+      "name": "Run Web (Query2Excel.Web)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build Query2Excel.Web",
+      "program": "${workspaceFolder}/Query2Excel.Web/bin/Debug/net8.0/Query2Excel.Web.dll",
+      "cwd": "${workspaceFolder}/Query2Excel.Web",
+      "stopAtEntry": false,
+      "console": "integratedTerminal",
+      "env": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Run Console + Web",
+      "configurations": [
+        "Run Console (Query2Excel.App)",
+        "Run Web (Query2Excel.Web)"
+      ]
+    }
+  ]
+}
