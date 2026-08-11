@@ -23,6 +23,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Query2Excel.App\Query2Excel.App.csproj" />
+    <ProjectReference Include="..\Query2Excel.Core\Query2Excel.Core.csproj" />
   </ItemGroup>
 
 </Project>
