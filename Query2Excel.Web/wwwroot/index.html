@@ -1,0 +1,1422 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Query2Excel Studio</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/neo.min.css">
+  <style>
+    :root {
+      --bg-ink: #0f1a20;
+      --bg-deep: #162732;
+      --paper: #f4f0e6;
+      --panel: #fffaf0;
+      --line: #d8cdb4;
+      --accent: #ee7a31;
+      --accent-2: #087f8c;
+      --text: #1d2630;
+      --muted: #516170;
+      --danger: #ad2e24;
+      --ok: #1f7a31;
+      --shadow: 0 18px 36px rgba(9, 23, 30, 0.24);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "Space Grotesk", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 85% -10%, rgba(238, 122, 49, 0.24), transparent 42%),
+        radial-gradient(circle at -5% 50%, rgba(8, 127, 140, 0.24), transparent 42%),
+        linear-gradient(145deg, var(--bg-deep), var(--bg-ink));
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 18px;
+    }
+
+    .shell {
+      width: min(1040px, 100%);
+      min-width: 0;
+      min-height: 560px;
+      background: linear-gradient(180deg, var(--panel), var(--paper));
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      transform: translateY(8px);
+      opacity: 0;
+      animation: rise 460ms ease-out forwards;
+    }
+
+    @keyframes rise {
+      to { transform: translateY(0); opacity: 1; }
+    }
+
+    .header {
+      padding: 24px 26px 18px;
+      border-bottom: 1px dashed var(--line);
+      background:
+        linear-gradient(92deg, rgba(238, 122, 49, 0.11), rgba(8, 127, 140, 0.12));
+    }
+
+    .title {
+      margin: 0;
+      font-size: clamp(1.4rem, 3.2vw, 2.1rem);
+      letter-spacing: 0.01em;
+    }
+
+    .sub {
+      margin: 9px 0 0;
+      color: var(--muted);
+      font-size: 0.96rem;
+      max-width: 76ch;
+    }
+
+    .body {
+      padding: 20px 26px 26px;
+      display: grid;
+      gap: 16px;
+      min-width: 0;
+    }
+
+    #run-form {
+      width: 100%;
+      min-width: 0;
+    }
+
+    #run-form > div {
+      min-width: 0;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(180px, 220px);
+      gap: 14px;
+    }
+
+    .credentials-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 14px;
+    }
+
+    .grid > div,
+    .credentials-grid > div {
+      min-width: 0;
+    }
+
+    label {
+      display: block;
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin-bottom: 6px;
+      letter-spacing: 0.02em;
+    }
+
+    input, textarea {
+      width: 100%;
+      min-width: 0;
+      max-width: 100%;
+      border: 1px solid #bcc6cc;
+      background: #fff;
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 0.9rem;
+      color: var(--text);
+      transition: border-color 130ms ease, box-shadow 130ms ease;
+    }
+
+    textarea {
+      min-height: 230px;
+      resize: vertical;
+      line-height: 1.5;
+      tab-size: 4;
+      -moz-tab-size: 4;
+    }
+
+    input:focus, textarea:focus {
+      outline: none;
+      border-color: var(--accent-2);
+      box-shadow: 0 0 0 3px rgba(8, 127, 140, 0.18);
+    }
+
+    input::placeholder,
+    textarea::placeholder {
+      color: #8d99a5;
+      opacity: 1;
+    }
+
+    .CodeMirror {
+      width: 100%;
+      max-width: 100%;
+      min-height: 230px;
+      border: 1px solid #bcc6cc;
+      border-radius: 10px;
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 0.9rem;
+      background: #fff;
+    }
+
+    .CodeMirror pre {
+      tab-size: 4;
+      -moz-tab-size: 4;
+    }
+
+    .CodeMirror-focused {
+      border-color: var(--accent-2);
+      box-shadow: 0 0 0 3px rgba(8, 127, 140, 0.18);
+    }
+
+    .CodeMirror-cursor {
+      border-left: 2px solid #1d2630 !important;
+      border-right: none !important;
+      width: 0 !important;
+      background: transparent !important;
+    }
+
+    .CodeMirror.cm-fat-cursor .CodeMirror-cursor {
+      border-left: 2px solid #1d2630 !important;
+      width: 0 !important;
+      background: transparent !important;
+    }
+
+    .cm-metadata-target {
+      background: rgba(238, 122, 49, 0.22);
+      border-radius: 4px;
+      outline: 1px solid rgba(215, 61, 51, 0.38);
+    }
+
+    .actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-top: 4px;
+    }
+
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .toggle-row input[type="checkbox"] {
+      width: auto;
+      min-width: auto;
+      max-width: none;
+      transform: scale(1.08);
+    }
+
+    .toggle-row label {
+      margin: 0;
+      cursor: pointer;
+      color: var(--text);
+    }
+
+    button {
+      appearance: none;
+      border: none;
+      border-radius: 999px;
+      padding: 11px 18px;
+      font-size: 0.92rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      cursor: pointer;
+      color: #fff;
+      background: linear-gradient(130deg, var(--accent), #f05a3d 44%, #d73d33);
+      box-shadow: 0 8px 18px rgba(215, 61, 51, 0.28);
+      transition: transform 120ms ease, box-shadow 120ms ease, filter 120ms ease;
+    }
+
+    button:hover { transform: translateY(-1px); filter: saturate(1.05); }
+    button:disabled { opacity: 0.65; cursor: wait; transform: none; }
+
+    .status {
+      font-size: 0.9rem;
+      color: var(--muted);
+      min-height: 1.2em;
+    }
+
+    .status.ok { color: var(--ok); }
+    .status.error { color: var(--danger); }
+
+    .context-menu {
+      position: fixed;
+      z-index: 90;
+      min-width: 230px;
+      border: 1px solid #bcc6cc;
+      border-radius: 10px;
+      background: #fff;
+      box-shadow: 0 12px 28px rgba(9, 23, 30, 0.24);
+      overflow: hidden;
+      display: none;
+    }
+
+    .context-menu button {
+      width: 100%;
+      display: block;
+      text-align: left;
+      border: none;
+      border-radius: 0;
+      background: #fff;
+      color: var(--text);
+      box-shadow: none;
+      padding: 10px 12px;
+      font-family: "Space Grotesk", sans-serif;
+      font-size: 0.9rem;
+      font-weight: 500;
+      letter-spacing: 0.01em;
+    }
+
+    .context-menu button:hover {
+      transform: none;
+      filter: none;
+      background: #f7f2e8;
+    }
+
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 80;
+      background: rgba(8, 15, 19, 0.45);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+    }
+
+    .modal {
+      width: min(640px, 100%);
+      max-height: 88vh;
+      overflow: auto;
+      background: linear-gradient(180deg, #fffef9, #faf4e8);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      box-shadow: var(--shadow);
+      padding: 16px;
+    }
+
+    .modal h2 {
+      margin: 0;
+      font-size: 1.2rem;
+    }
+
+    .modal .hint {
+      margin: 8px 0 14px;
+      color: var(--muted);
+      font-size: 0.88rem;
+    }
+
+    .modal-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+    }
+
+    #metaDescription {
+      min-height: calc(1.5em * 2 + 20px);
+      max-height: calc(1.5em * 2 + 20px);
+      resize: none;
+    }
+
+    #metaRowFormatColumn:disabled {
+      background: #f1f4f6;
+      color: #70808f;
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+      margin-top: 14px;
+    }
+
+    .secondary {
+      background: #dce6ea;
+      color: #1f2d35;
+      box-shadow: none;
+    }
+
+    .modal-status {
+      min-height: 1.2em;
+      font-size: 0.88rem;
+      color: var(--danger);
+      margin-top: 10px;
+    }
+
+    @media (max-width: 1080px) {
+      .shell {
+        min-height: 0;
+        width: 100%;
+      }
+
+      .grid { grid-template-columns: 1fr; }
+      .credentials-grid { grid-template-columns: 1fr; }
+      .body, .header { padding-left: 16px; padding-right: 16px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="header">
+      <h1 class="title">Query2Excel Studio</h1>
+      <p class="sub">Run SQL and download workbook output from your browser while preserving the same Core engine as the console app.</p>
+    </header>
+
+    <section class="body">
+      <form id="run-form">
+        <div class="credentials-grid">
+          <div>
+            <label for="userId">User Id</label>
+            <input id="userId" name="userId" required autocomplete="username" placeholder="Database login" />
+          </div>
+          <div>
+            <label for="password">Password</label>
+            <input id="password" name="password" type="password" autocomplete="current-password" placeholder="Database password" />
+          </div>
+        </div>
+
+        <div style="margin-top: 12px;">
+          <label for="connectionStringTemplate">Connection String Template</label>
+          <input id="connectionStringTemplate" name="connectionStringTemplate" required autocomplete="off" placeholder="Server=localhost;Database=CDMSandbox;User Id={UserId};Password={Password};TrustServerCertificate=True;" />
+        </div>
+
+        <div style="margin-top: 12px;">
+          <label for="sqlScript">SQL Script</label>
+          <textarea id="sqlScript" name="sqlScript" placeholder="SELECT __SheetName = 'Objects';&#10;EXEC sp_find;"></textarea>
+        </div>
+
+        <div class="grid" style="margin-top: 12px;">
+          <div>
+            <label for="outputFileName">Output File Name</label>
+            <input id="outputFileName" name="outputFileName" placeholder="query2excel-output.xlsx" />
+          </div>
+          <div>
+            <label for="commandTimeoutSeconds">Timeout (seconds)</label>
+            <input id="commandTimeoutSeconds" name="commandTimeoutSeconds" type="number" min="1" value="120" />
+          </div>
+        </div>
+
+        <div class="toggle-row">
+          <input id="openWithDefaultApp" name="openWithDefaultApp" type="checkbox" />
+          <label for="openWithDefaultApp">Open generated workbook with default .xlsx app</label>
+        </div>
+
+        <div class="actions" style="margin-top: 10px;">
+          <input id="importWorkbookFile" type="file" accept=".xlsx" style="display: none;" />
+          <button id="importWorkbookButton" type="button" class="secondary">Load Existing Workbook</button>
+          <span class="status" style="font-size: 0.82rem;">Populates fields from the workbook SQL sheet.</span>
+        </div>
+
+        <div class="actions">
+          <button id="run-button" type="submit">Generate Workbook</button>
+          <span id="status" class="status"></span>
+        </div>
+      </form>
+    </section>
+  </main>
+
+  <div id="sqlContextMenu" class="context-menu" role="menu" aria-hidden="true">
+    <button id="openMetadataBuilder" type="button" role="menuitem">Metadata SELECT Builder</button>
+  </div>
+
+  <div id="metadataModalBackdrop" class="modal-backdrop" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="metadataModalTitle">
+      <h2 id="metadataModalTitle">Metadata SELECT Builder</h2>
+      <p class="hint" id="metadataModeHint">Insert a metadata SELECT before the cursor.</p>
+
+      <div class="modal-grid">
+        <div>
+          <label for="metaSheetName">Sheet Name</label>
+          <input id="metaSheetName" name="metaSheetName" autocomplete="off" placeholder="Renames the next output worksheet." />
+        </div>
+        <div>
+          <label for="metaTitle">Title</label>
+          <input id="metaTitle" name="metaTitle" autocomplete="off" placeholder="Adds a heading row above the next table." />
+        </div>
+        <div>
+          <label for="metaDescription">Description</label>
+          <textarea id="metaDescription" name="metaDescription" placeholder="Adds explanatory text above the next table."></textarea>
+        </div>
+        <div class="toggle-row" style="margin-top: 0;">
+          <input id="metaAppendBelow" name="metaAppendBelow" type="checkbox" />
+          <label for="metaAppendBelow">Append next table below previous output table</label>
+        </div>
+        <div class="toggle-row" style="margin-top: 0;">
+          <input id="metaRowFormatColumnEnabled" name="metaRowFormatColumnEnabled" type="checkbox" />
+          <label for="metaRowFormatColumnEnabled">Use row style column</label>
+        </div>
+        <div>
+          <label for="metaRowFormatColumn">Row style column name</label>
+          <input id="metaRowFormatColumn" name="metaRowFormatColumn" type="text" autocomplete="off" placeholder="__RowFormat" value="__RowFormat" />
+        </div>
+      </div>
+
+      <div id="metadataModalStatus" class="modal-status"></div>
+
+      <div class="modal-actions">
+        <button id="closeMetadataModal" type="button" class="secondary">Cancel</button>
+        <button id="applyMetadataModal" type="button">Apply</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/sql/sql.min.js"></script>
+  <script>
+    const form = document.getElementById('run-form');
+    const statusNode = document.getElementById('status');
+    const runButton = document.getElementById('run-button');
+    const importWorkbookButton = document.getElementById('importWorkbookButton');
+    const importWorkbookFile = document.getElementById('importWorkbookFile');
+    const storageKey = 'query2excel-web-form-nonsecret';
+    const sqlContextMenu = document.getElementById('sqlContextMenu');
+    const openMetadataBuilderButton = document.getElementById('openMetadataBuilder');
+    const metadataModalBackdrop = document.getElementById('metadataModalBackdrop');
+    const metadataModeHint = document.getElementById('metadataModeHint');
+    const metadataModalStatus = document.getElementById('metadataModalStatus');
+    const closeMetadataModalButton = document.getElementById('closeMetadataModal');
+    const applyMetadataModalButton = document.getElementById('applyMetadataModal');
+    const metaSheetNameInput = document.getElementById('metaSheetName');
+    const metaTitleInput = document.getElementById('metaTitle');
+    const metaDescriptionInput = document.getElementById('metaDescription');
+    const metaAppendBelowInput = document.getElementById('metaAppendBelow');
+    const metaRowFormatColumnEnabledInput = document.getElementById('metaRowFormatColumnEnabled');
+    const metaRowFormatColumnInput = document.getElementById('metaRowFormatColumn');
+    let sqlEditor = null;
+    let pendingSqlContext = null;
+    let contextMenuIgnoreUntil = 0;
+    let activeStatementMarker = null;
+    const metadataSelectFields = new Set([
+      '__sheetname',
+      '__title',
+      '__description',
+      '__appendbelowprevioustable',
+      '__rowformatcolumn'
+    ]);
+
+    function updateRowFormatColumnInputState() {
+      metaRowFormatColumnInput.disabled = !metaRowFormatColumnEnabledInput.checked;
+    }
+
+    function getSqlScriptValue() {
+      return sqlEditor ? sqlEditor.getValue() : form.sqlScript.value;
+    }
+
+    function setSqlScriptValue(value) {
+      if (sqlEditor) {
+        sqlEditor.setValue(value || '');
+      } else {
+        form.sqlScript.value = value || '';
+      }
+    }
+
+    function getCursorIndex() {
+      if (sqlEditor) {
+        return sqlEditor.indexFromPos(sqlEditor.getCursor());
+      }
+
+      return typeof form.sqlScript.selectionStart === 'number' ? form.sqlScript.selectionStart : 0;
+    }
+
+    function setSqlCursorIndex(index) {
+      if (sqlEditor) {
+        sqlEditor.setCursor(sqlEditor.posFromIndex(index));
+        sqlEditor.focus();
+        return;
+      }
+
+      form.sqlScript.focus();
+      form.sqlScript.selectionStart = index;
+      form.sqlScript.selectionEnd = index;
+    }
+
+    function insertTabCharacterIntoTextarea(textarea) {
+      if (!textarea) {
+        return;
+      }
+
+      const start = typeof textarea.selectionStart === 'number' ? textarea.selectionStart : textarea.value.length;
+      const end = typeof textarea.selectionEnd === 'number' ? textarea.selectionEnd : start;
+      const before = textarea.value.slice(0, start);
+      const after = textarea.value.slice(end);
+      textarea.value = `${before}\t${after}`;
+      textarea.selectionStart = start + 1;
+      textarea.selectionEnd = start + 1;
+    }
+
+    function findStatementBounds(script, cursorIndex) {
+      const safeScript = script || '';
+      const safeCursor = Math.max(0, Math.min(cursorIndex, safeScript.length));
+
+      // If cursor is exactly at a statement boundary (e.g., just after ';'),
+      // treat it as targeting the statement to the left.
+      let probeCursor = safeCursor;
+      while (probeCursor > 0 && /\s/.test(safeScript[probeCursor - 1])) {
+        probeCursor--;
+      }
+
+      if (probeCursor > 0 && safeScript[probeCursor - 1] === ';') {
+        probeCursor--;
+      }
+
+      let start = safeScript.lastIndexOf(';', Math.max(0, probeCursor - 1));
+      start = start === -1 ? 0 : start + 1;
+      while (start < safeScript.length && /\s/.test(safeScript[start])) {
+        start++;
+      }
+
+      let end = safeScript.indexOf(';', probeCursor);
+      end = end === -1 ? safeScript.length : end + 1;
+
+      return { start, end };
+    }
+
+    function getNonEmptyStatementRanges(script) {
+      const ranges = [];
+      const safeScript = script || '';
+      let rawStart = 0;
+
+      for (let index = 0; index < safeScript.length; index++) {
+        if (safeScript[index] !== ';') {
+          continue;
+        }
+
+        const rawEnd = index + 1;
+        let start = rawStart;
+        let end = rawEnd;
+
+        while (start < end && /\s/.test(safeScript[start])) {
+          start++;
+        }
+
+        while (end > start && /\s/.test(safeScript[end - 1])) {
+          end--;
+        }
+
+        if (start < end) {
+          ranges.push({ start, end, text: safeScript.slice(start, end) });
+        }
+
+        rawStart = rawEnd;
+      }
+
+      if (rawStart < safeScript.length) {
+        let start = rawStart;
+        let end = safeScript.length;
+
+        while (start < end && /\s/.test(safeScript[start])) {
+          start++;
+        }
+
+        while (end > start && /\s/.test(safeScript[end - 1])) {
+          end--;
+        }
+
+        if (start < end) {
+          ranges.push({ start, end, text: safeScript.slice(start, end) });
+        }
+      }
+
+      return ranges;
+    }
+
+    function resolveMetadataTargetContext(context, script) {
+      const currentStatement = {
+        start: context.statementStart,
+        end: context.statementEnd,
+        text: context.statementText
+      };
+
+      if (isMetadataSelectStatement(currentStatement.text)) {
+        return {
+          cursorIndex: context.cursorIndex,
+          statementStart: currentStatement.start,
+          statementEnd: currentStatement.end,
+          statementText: currentStatement.text,
+          mode: 'update',
+          source: 'current'
+        };
+      }
+
+      const statements = getNonEmptyStatementRanges(script);
+      const currentIndex = statements.findIndex((statement) =>
+        statement.start === currentStatement.start && statement.end === currentStatement.end);
+
+      if (currentIndex > 0) {
+        const previousStatement = statements[currentIndex - 1];
+        if (isMetadataSelectStatement(previousStatement.text)) {
+          return {
+            cursorIndex: context.cursorIndex,
+            statementStart: previousStatement.start,
+            statementEnd: previousStatement.end,
+            statementText: previousStatement.text,
+            mode: 'update',
+            source: 'previous'
+          };
+        }
+      }
+
+      return {
+        cursorIndex: context.cursorIndex,
+        statementStart: currentStatement.start,
+        statementEnd: currentStatement.end,
+        statementText: currentStatement.text,
+        mode: 'insert',
+        source: 'insert'
+      };
+    }
+
+    function extractMetadataAssignments(statementText) {
+      const withoutTrailingSemicolon = (statementText || '').replace(/\s*;\s*$/, '');
+      const selectMatch = /^\s*select\s+([\s\S]+)$/i.exec(withoutTrailingSemicolon);
+      if (!selectMatch) {
+        return null;
+      }
+
+      const assignments = splitSqlAssignments(selectMatch[1]);
+      if (!assignments.length) {
+        return null;
+      }
+
+      const parsedAssignments = [];
+      for (const assignment of assignments) {
+        const match = /^(__[A-Za-z0-9_]+)\s*=\s*([\s\S]+)$/i.exec(assignment);
+        if (!match) {
+          return null;
+        }
+
+        const fieldName = match[1].toLowerCase();
+        if (!metadataSelectFields.has(fieldName)) {
+          return null;
+        }
+
+        parsedAssignments.push({ fieldName, rawValue: match[2].trim() });
+      }
+
+      return parsedAssignments;
+    }
+
+    function isMetadataSelectStatement(statementText) {
+      return extractMetadataAssignments(statementText) !== null;
+    }
+
+    function splitSqlAssignments(assignmentsText) {
+      const chunks = [];
+      let current = '';
+      let inSingleQuote = false;
+
+      for (let index = 0; index < assignmentsText.length; index++) {
+        const character = assignmentsText[index];
+
+        if (character === "'") {
+          if (inSingleQuote && assignmentsText[index + 1] === "'") {
+            current += "''";
+            index++;
+            continue;
+          }
+
+          inSingleQuote = !inSingleQuote;
+          current += character;
+          continue;
+        }
+
+        if (character === ',' && !inSingleQuote) {
+          if (current.trim()) {
+            chunks.push(current.trim());
+          }
+          current = '';
+          continue;
+        }
+
+        current += character;
+      }
+
+      if (current.trim()) {
+        chunks.push(current.trim());
+      }
+
+      return chunks;
+    }
+
+    function parseMetadataSelect(statementText) {
+      if (!isMetadataSelectStatement(statementText)) {
+        return null;
+      }
+
+      const assignments = extractMetadataAssignments(statementText);
+      if (!assignments) {
+        return null;
+      }
+
+      const defaults = {
+        sheetName: '',
+        title: '',
+        description: '',
+        appendBelowPreviousTable: false,
+        rowFormatColumn: ''
+      };
+
+      let foundAnyMetadataField = false;
+
+      for (const assignment of assignments) {
+        const fieldName = assignment.fieldName;
+        const rawValue = assignment.rawValue;
+
+        if (fieldName === '__sheetname') {
+          defaults.sheetName = parseMetadataStringValue(rawValue);
+          foundAnyMetadataField = true;
+        } else if (fieldName === '__title') {
+          defaults.title = parseMetadataStringValue(rawValue);
+          foundAnyMetadataField = true;
+        } else if (fieldName === '__description') {
+          defaults.description = parseMetadataStringValue(rawValue);
+          foundAnyMetadataField = true;
+        } else if (fieldName === '__appendbelowprevioustable') {
+          defaults.appendBelowPreviousTable = parseMetadataBooleanValue(rawValue);
+          foundAnyMetadataField = true;
+        } else if (fieldName === '__rowformatcolumn') {
+          defaults.rowFormatColumn = parseMetadataStringValue(rawValue);
+          foundAnyMetadataField = true;
+        }
+      }
+
+      return foundAnyMetadataField ? defaults : null;
+    }
+
+    function parseMetadataStringValue(rawValue) {
+      const value = (rawValue || '').trim();
+      const singleQuotedMatch = /^'(.*)'$/s.exec(value);
+      if (singleQuotedMatch) {
+        return singleQuotedMatch[1].replace(/''/g, "'");
+      }
+
+      return value;
+    }
+
+    function parseMetadataBooleanValue(rawValue) {
+      const normalized = parseMetadataStringValue(rawValue).trim().toLowerCase();
+      return normalized === '1'
+        || normalized === 'true'
+        || normalized === 'yes'
+        || normalized === 'on';
+    }
+
+    function escapeSqlString(value) {
+      return (value || '').replace(/'/g, "''");
+    }
+
+    function buildMetadataSelectFromForm() {
+      const parts = [];
+
+      const sheetName = (metaSheetNameInput.value || '').trim();
+      const title = (metaTitleInput.value || '').trim();
+      const description = (metaDescriptionInput.value || '').trim();
+      const appendBelow = metaAppendBelowInput.checked;
+      const rowFormatEnabled = metaRowFormatColumnEnabledInput.checked;
+      const rowFormatColumn = (metaRowFormatColumnInput.value || '').trim() || '__RowFormat';
+
+      if (sheetName) {
+        parts.push(`__SheetName = '${escapeSqlString(sheetName)}'`);
+      }
+
+      if (title) {
+        parts.push(`__Title = '${escapeSqlString(title)}'`);
+      }
+
+      if (description) {
+        parts.push(`__Description = '${escapeSqlString(description)}'`);
+      }
+
+      if (appendBelow) {
+        parts.push('__AppendBelowPreviousTable = 1');
+      }
+
+      if (rowFormatEnabled) {
+        parts.push(`__RowFormatColumn = '${escapeSqlString(rowFormatColumn)}'`);
+      }
+
+      if (!parts.length) {
+        return '';
+      }
+
+      return `SELECT ${parts.join(',\n\t')};`;
+    }
+
+    function setMetadataModalStatus(message) {
+      metadataModalStatus.textContent = message || '';
+    }
+
+    function clearStatementHighlight() {
+      if (activeStatementMarker && typeof activeStatementMarker.clear === 'function') {
+        activeStatementMarker.clear();
+      }
+
+      activeStatementMarker = null;
+
+      if (!sqlEditor) {
+        form.sqlScript.selectionStart = form.sqlScript.selectionEnd;
+      }
+    }
+
+    function highlightStatement(start, end) {
+      clearStatementHighlight();
+
+      if (sqlEditor) {
+        const from = sqlEditor.posFromIndex(start);
+        const to = sqlEditor.posFromIndex(end);
+        activeStatementMarker = sqlEditor.markText(from, to, { className: 'cm-metadata-target' });
+        sqlEditor.scrollIntoView(from, 80);
+        return;
+      }
+
+      form.sqlScript.focus();
+      form.sqlScript.selectionStart = start;
+      form.sqlScript.selectionEnd = end;
+    }
+
+    function hideSqlContextMenu(shouldClearHighlight = true) {
+      sqlContextMenu.style.display = 'none';
+      sqlContextMenu.setAttribute('aria-hidden', 'true');
+
+      if (shouldClearHighlight && metadataModalBackdrop.style.display !== 'flex') {
+        clearStatementHighlight();
+      }
+    }
+
+    function showSqlContextMenu(pageX, pageY, context) {
+      pendingSqlContext = context;
+      sqlContextMenu.style.display = 'block';
+      sqlContextMenu.setAttribute('aria-hidden', 'false');
+
+      const menuWidth = sqlContextMenu.offsetWidth || 230;
+      const menuHeight = sqlContextMenu.offsetHeight || 44;
+      const clampedX = Math.min(pageX, Math.max(8, window.innerWidth - menuWidth - 8));
+      const clampedY = Math.min(pageY, Math.max(8, window.innerHeight - menuHeight - 8));
+
+      sqlContextMenu.style.left = `${Math.max(8, clampedX)}px`;
+      sqlContextMenu.style.top = `${Math.max(8, clampedY)}px`;
+      contextMenuIgnoreUntil = Date.now() + 220;
+    }
+
+    function openMetadataModalFromContext() {
+      if (!pendingSqlContext) {
+        return;
+      }
+
+      hideSqlContextMenu(false);
+      setMetadataModalStatus('');
+
+      const parsed = parseMetadataSelect(pendingSqlContext.statementText);
+      const isUpdateMode = parsed !== null;
+
+      if (isUpdateMode) {
+        highlightStatement(pendingSqlContext.statementStart, pendingSqlContext.statementEnd);
+
+        if (pendingSqlContext.source === 'previous') {
+          metadataModeHint.textContent = 'Using the metadata SELECT directly above your cursor. Applying will update that highlighted statement.';
+        } else {
+          metadataModeHint.textContent = 'Metadata SELECT detected at cursor. Applying will update that highlighted statement.';
+        }
+
+        applyMetadataModalButton.textContent = 'Update Metadata SELECT';
+        metaSheetNameInput.value = parsed.sheetName;
+        metaTitleInput.value = parsed.title;
+        metaDescriptionInput.value = parsed.description;
+        metaAppendBelowInput.checked = parsed.appendBelowPreviousTable;
+        metaRowFormatColumnEnabledInput.checked = !(!(parsed.rowFormatColumn || '').trim());
+        metaRowFormatColumnInput.value = (parsed.rowFormatColumn || '').trim() || '__RowFormat';
+        updateRowFormatColumnInputState();
+      } else {
+        clearStatementHighlight();
+        metadataModeHint.textContent = 'No metadata SELECT detected at cursor. Applying will insert one before the cursor.';
+        applyMetadataModalButton.textContent = 'Insert Metadata SELECT';
+        metaSheetNameInput.value = '';
+        metaTitleInput.value = '';
+        metaDescriptionInput.value = '';
+        metaAppendBelowInput.checked = false;
+        metaRowFormatColumnEnabledInput.checked = false;
+        metaRowFormatColumnInput.value = '__RowFormat';
+        updateRowFormatColumnInputState();
+      }
+
+      pendingSqlContext.mode = isUpdateMode ? 'update' : 'insert';
+
+      metadataModalBackdrop.style.display = 'flex';
+      metadataModalBackdrop.setAttribute('aria-hidden', 'false');
+      metaSheetNameInput.focus();
+    }
+
+    function closeMetadataModal() {
+      metadataModalBackdrop.style.display = 'none';
+      metadataModalBackdrop.setAttribute('aria-hidden', 'true');
+      setMetadataModalStatus('');
+      clearStatementHighlight();
+      if (pendingSqlContext && typeof pendingSqlContext.cursorIndex === 'number') {
+        setSqlCursorIndex(pendingSqlContext.cursorIndex);
+      }
+    }
+
+    function applyMetadataModal() {
+      if (!pendingSqlContext) {
+        closeMetadataModal();
+        return;
+      }
+
+      const metadataSelect = buildMetadataSelectFromForm();
+      if (!metadataSelect) {
+        setMetadataModalStatus('Provide at least one metadata value before applying.');
+        return;
+      }
+
+      const hasSheetName = (metaSheetNameInput.value || '').trim().length > 0;
+      const hasAppendBelow = metaAppendBelowInput.checked;
+      if (hasSheetName && hasAppendBelow) {
+        setMetadataModalStatus('__SheetName cannot be combined with __AppendBelowPreviousTable.');
+        return;
+      }
+
+      const hasRowFormatColumn = metaRowFormatColumnEnabledInput.checked;
+      if (hasRowFormatColumn && !((metaRowFormatColumnInput.value || '').trim())) {
+        setMetadataModalStatus('__RowFormatColumn name is required when row style metadata is enabled.');
+        return;
+      }
+
+      const originalScript = getSqlScriptValue();
+      let updatedScript = originalScript;
+      let nextCursorIndex = pendingSqlContext.cursorIndex;
+
+      if (pendingSqlContext.mode === 'update') {
+        const before = originalScript.slice(0, pendingSqlContext.statementStart);
+        const after = originalScript.slice(pendingSqlContext.statementEnd);
+        updatedScript = `${before}${metadataSelect}${after}`;
+        nextCursorIndex = pendingSqlContext.statementStart + metadataSelect.length;
+      } else {
+        const insertIndex = typeof pendingSqlContext.statementStart === 'number'
+          ? pendingSqlContext.statementStart
+          : pendingSqlContext.cursorIndex;
+
+        const before = originalScript.slice(0, insertIndex);
+        const after = originalScript.slice(insertIndex);
+        const beforeNeedsNewline = before.length > 0 && !/\n\s*$/.test(before);
+        const afterNeedsNewline = after.length > 0 && !/^\s*\n/.test(after);
+        const prefix = beforeNeedsNewline ? '\n' : '';
+        const suffix = afterNeedsNewline ? '\n' : '';
+
+        updatedScript = `${before}${prefix}${metadataSelect}${suffix}${after}`;
+        nextCursorIndex = before.length + prefix.length + metadataSelect.length;
+      }
+
+      setSqlScriptValue(updatedScript);
+      setSqlCursorIndex(nextCursorIndex);
+      saveState();
+      closeMetadataModal();
+    }
+
+    function initializeSqlEditor() {
+      if (typeof CodeMirror === 'undefined') {
+        return;
+      }
+
+      sqlEditor = CodeMirror.fromTextArea(form.sqlScript, {
+        mode: 'text/x-sql',
+        theme: 'neo',
+        lineNumbers: true,
+        lineWrapping: false,
+        matchBrackets: true,
+        indentWithTabs: true,
+        indentUnit: 4,
+        tabSize: 4,
+        extraKeys: {
+          Tab: (cm) => cm.replaceSelection('\t', 'end')
+        }
+      });
+
+      sqlEditor.setSize('100%', 230);
+      sqlEditor.on('change', () => {
+        saveState();
+      });
+
+      function showMetadataContextMenuForEvent(event) {
+        const cursor = sqlEditor.coordsChar({ left: event.pageX, top: event.pageY });
+        const cursorIndex = sqlEditor.indexFromPos(cursor);
+        const script = getSqlScriptValue();
+        const bounds = findStatementBounds(script, cursorIndex);
+
+        const resolvedContext = resolveMetadataTargetContext({
+          cursorIndex,
+          statementStart: bounds.start,
+          statementEnd: bounds.end,
+          statementText: script.slice(bounds.start, bounds.end),
+          mode: 'insert'
+        }, script);
+
+        if (resolvedContext.mode === 'update') {
+          highlightStatement(resolvedContext.statementStart, resolvedContext.statementEnd);
+        } else {
+          clearStatementHighlight();
+        }
+
+        showSqlContextMenu(event.clientX, event.clientY, resolvedContext);
+      }
+
+      sqlEditor.getWrapperElement().addEventListener('contextmenu', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        showMetadataContextMenuForEvent(event);
+      });
+
+      // Some external browsers (including Edge) can route right-click through inner editor nodes.
+      document.addEventListener('contextmenu', (event) => {
+        if (!sqlEditor || !sqlEditor.getWrapperElement().contains(event.target)) {
+          return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+        showMetadataContextMenuForEvent(event);
+      }, true);
+    }
+
+    function withXlsxExtension(fileName) {
+      const normalized = normalizeOutputFileName(fileName);
+      if (!normalized) {
+        return '';
+      }
+
+      return normalized.toLowerCase().endsWith('.xlsx') ? normalized : normalized + '.xlsx';
+    }
+
+    function normalizeOutputFileName(fileName) {
+      const trimmed = (fileName || '').trim().replace(/^['"]+|['"]+$/g, '');
+      if (!trimmed) {
+        return '';
+      }
+
+      const normalizedSlashes = trimmed.replace(/\\/g, '/');
+      const segments = normalizedSlashes.split('/').filter(Boolean);
+      return segments.length ? segments[segments.length - 1] : '';
+    }
+
+    function getSavedState() {
+      try {
+        const raw = localStorage.getItem(storageKey);
+        return raw ? JSON.parse(raw) : null;
+      } catch {
+        return null;
+      }
+    }
+
+    function saveState() {
+      const state = {
+        sqlScript: getSqlScriptValue(),
+        outputFileName: form.outputFileName.value,
+        commandTimeoutSeconds: form.commandTimeoutSeconds.value,
+        openWithDefaultApp: form.openWithDefaultApp.checked
+      };
+
+      localStorage.setItem(storageKey, JSON.stringify(state));
+    }
+
+    function restoreLocalState() {
+      const saved = getSavedState();
+      if (!saved) {
+        return;
+      }
+
+      if (typeof saved.sqlScript === 'string') {
+        setSqlScriptValue(saved.sqlScript);
+      }
+
+      if (typeof saved.outputFileName === 'string') {
+        form.outputFileName.value = saved.outputFileName;
+      }
+
+      if (typeof saved.commandTimeoutSeconds === 'string' && saved.commandTimeoutSeconds.trim()) {
+        form.commandTimeoutSeconds.value = saved.commandTimeoutSeconds;
+      }
+
+      if (typeof saved.openWithDefaultApp === 'boolean') {
+        form.openWithDefaultApp.checked = saved.openWithDefaultApp;
+      }
+    }
+
+    async function restoreServerSettings() {
+      try {
+        const response = await fetch('/settings', { method: 'GET' });
+        if (!response.ok) {
+          return;
+        }
+
+        const settings = await response.json();
+        if (typeof settings.userId === 'string') {
+          form.userId.value = settings.userId;
+        }
+
+        if (settings.hasPassword === true) {
+          form.password.required = false;
+          form.password.placeholder = '********';
+        } else {
+          form.password.required = true;
+          form.password.placeholder = 'Database password';
+        }
+
+        if (typeof settings.connectionStringTemplate === 'string') {
+          form.connectionStringTemplate.value = settings.connectionStringTemplate;
+        }
+
+        if (typeof settings.openWorkbookAfterGenerate === 'boolean') {
+          form.openWithDefaultApp.checked = settings.openWorkbookAfterGenerate;
+        }
+
+        if (typeof settings.commandTimeoutSeconds === 'number' && settings.commandTimeoutSeconds > 0 && !form.commandTimeoutSeconds.value) {
+          form.commandTimeoutSeconds.value = String(settings.commandTimeoutSeconds);
+        }
+      } catch {
+        // Ignore settings bootstrap failures and let users fill the form.
+      }
+    }
+
+    function setStatus(message, kind) {
+      statusNode.textContent = message;
+      statusNode.className = 'status' + (kind ? ' ' + kind : '');
+    }
+
+    async function importWorkbookForRefresh(file) {
+      if (!file) {
+        return;
+      }
+
+      setStatus('Loading workbook...', '');
+      importWorkbookButton.disabled = true;
+
+      try {
+        const formData = new FormData();
+        formData.append('workbook', file);
+
+        const response = await fetch('/workbook/load', {
+          method: 'POST',
+          body: formData
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(errorText || 'Workbook import failed.');
+        }
+
+        const imported = await response.json();
+
+        if (typeof imported.connectionStringTemplate === 'string' && imported.connectionStringTemplate.trim()) {
+          form.connectionStringTemplate.value = imported.connectionStringTemplate;
+        }
+
+        if (typeof imported.sqlScript === 'string' && imported.sqlScript.trim()) {
+          setSqlScriptValue(imported.sqlScript);
+        }
+
+        if (typeof imported.outputFileName === 'string' && imported.outputFileName.trim()) {
+          form.outputFileName.value = imported.outputFileName;
+        }
+
+        saveState();
+        setStatus('Workbook loaded. Form fields have been populated from SQL worksheet.', 'ok');
+      } catch (error) {
+        setStatus(error.message || 'Workbook import failed.', 'error');
+      } finally {
+        importWorkbookButton.disabled = false;
+        importWorkbookFile.value = '';
+      }
+    }
+
+    importWorkbookButton.addEventListener('click', () => {
+      importWorkbookFile.click();
+    });
+
+    importWorkbookFile.addEventListener('change', async () => {
+      const file = importWorkbookFile.files && importWorkbookFile.files.length > 0
+        ? importWorkbookFile.files[0]
+        : null;
+
+      await importWorkbookForRefresh(file);
+    });
+
+    openMetadataBuilderButton.addEventListener('click', () => {
+      openMetadataModalFromContext();
+    });
+
+    closeMetadataModalButton.addEventListener('click', () => {
+      closeMetadataModal();
+    });
+
+    applyMetadataModalButton.addEventListener('click', () => {
+      applyMetadataModal();
+    });
+
+    metadataModalBackdrop.addEventListener('click', (event) => {
+      if (event.target === metadataModalBackdrop) {
+        closeMetadataModal();
+      }
+    });
+
+    metaRowFormatColumnEnabledInput.addEventListener('change', () => {
+      updateRowFormatColumnInputState();
+      if (!metaRowFormatColumnEnabledInput.checked) {
+        metaRowFormatColumnInput.value = '__RowFormat';
+      }
+    });
+
+    document.addEventListener('pointerdown', (event) => {
+      if (Date.now() <= contextMenuIgnoreUntil) {
+        return;
+      }
+
+      if (!sqlContextMenu.contains(event.target)) {
+        hideSqlContextMenu();
+      }
+    });
+
+    document.addEventListener('contextmenu', (event) => {
+      if (sqlEditor && sqlEditor.getWrapperElement().contains(event.target)) {
+        return;
+      }
+
+      if (!sqlContextMenu.contains(event.target)) {
+        hideSqlContextMenu();
+      }
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        hideSqlContextMenu();
+        if (metadataModalBackdrop.style.display === 'flex') {
+          closeMetadataModal();
+        }
+      }
+    });
+
+    initializeSqlEditor();
+    updateRowFormatColumnInputState();
+
+    if (!sqlEditor) {
+      form.sqlScript.addEventListener('keydown', (event) => {
+        if (event.key !== 'Tab') {
+          return;
+        }
+
+        event.preventDefault();
+        insertTabCharacterIntoTextarea(form.sqlScript);
+        saveState();
+      });
+
+      form.sqlScript.addEventListener('contextmenu', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+
+        const cursorIndex = typeof form.sqlScript.selectionStart === 'number' ? form.sqlScript.selectionStart : 0;
+        const script = getSqlScriptValue();
+        const bounds = findStatementBounds(script, cursorIndex);
+
+        const resolvedContext = resolveMetadataTargetContext({
+          cursorIndex,
+          statementStart: bounds.start,
+          statementEnd: bounds.end,
+          statementText: script.slice(bounds.start, bounds.end),
+          mode: 'insert'
+        }, script);
+
+        if (resolvedContext.mode === 'update') {
+          highlightStatement(resolvedContext.statementStart, resolvedContext.statementEnd);
+        } else {
+          clearStatementHighlight();
+        }
+
+        showSqlContextMenu(event.clientX, event.clientY, resolvedContext);
+      });
+    }
+
+    restoreLocalState();
+    restoreServerSettings();
+
+    form.addEventListener('input', () => {
+      saveState();
+    });
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      setStatus('Generating workbook...', '');
+      runButton.disabled = true;
+      saveState();
+
+      const sqlScript = getSqlScriptValue();
+      if (!sqlScript || !sqlScript.trim()) {
+        setStatus('SQL script is required.', 'error');
+        runButton.disabled = false;
+        return;
+      }
+
+      const payload = {
+        connectionStringTemplate: form.connectionStringTemplate.value,
+        userId: form.userId.value,
+        password: form.password.value,
+        sqlScript,
+        outputFileName: form.outputFileName.value,
+        commandTimeoutSeconds: Number(form.commandTimeoutSeconds.value || 120),
+        openWithDefaultApp: form.openWithDefaultApp.checked
+      };
+
+      try {
+        const response = await fetch('/run', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(errorText || 'Request failed.');
+        }
+
+        const contentType = response.headers.get('Content-Type') || '';
+        if (contentType.toLowerCase().includes('application/json')) {
+          const runResult = await response.json();
+          if (runResult && runResult.downloaded === false && typeof runResult.savedToPath === 'string') {
+            if (typeof runResult.backupFilePath === 'string' && runResult.backupFilePath) {
+              setStatus(`Workbook generated at ${runResult.savedToPath}. Previous file backed up to ${runResult.backupFilePath}.`, 'ok');
+            } else {
+              setStatus(`Workbook generated at ${runResult.savedToPath}`, 'ok');
+            }
+            return;
+          }
+        }
+
+        const blob = await response.blob();
+        const requestedFileName = withXlsxExtension(payload.outputFileName);
+        const fileName = requestedFileName || 'query2excel-output.xlsx';
+
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = fileName;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        URL.revokeObjectURL(url);
+
+        setStatus('Workbook generated and download started.', 'ok');
+      } catch (error) {
+        setStatus(error.message || 'Workbook generation failed.', 'error');
+      } finally {
+        runButton.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
