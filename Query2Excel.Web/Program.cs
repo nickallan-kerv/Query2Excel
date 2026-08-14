@@ -56,6 +56,13 @@ if (app.Environment.IsDevelopment() && launchBrowserOnStartup)
 
 app.MapGet("/settings", (IConfiguration configuration) =>
 {
+	var configuredRowStyleNames = configuration
+		.GetSection($"{Query2ExcelOptions.SectionName}:RowStyles")
+		.GetChildren()
+		.Select(section => section.Key)
+		.Where(name => !string.IsNullOrWhiteSpace(name))
+		.ToArray();
+
 	var response = new WebSettingsResponse
 	{
 		ConnectionStringTemplate = FirstNonEmpty(
@@ -69,7 +76,8 @@ app.MapGet("/settings", (IConfiguration configuration) =>
 			configuration["Query2ExcelWeb:DatabasePassword"],
 			configuration["Query2Excel:DatabasePassword"])),
 		OpenWorkbookAfterGenerate = configuration.GetValue<bool?>("Query2ExcelWeb:OpenWorkbookAfterGenerate") ?? false,
-		CommandTimeoutSeconds = 120
+		CommandTimeoutSeconds = 120,
+		RowStyleNames = configuredRowStyleNames
 	};
 
 	return Results.Json(response);
@@ -584,6 +592,8 @@ internal sealed class WebSettingsResponse
 	public bool OpenWorkbookAfterGenerate { get; init; }
 
 	public int CommandTimeoutSeconds { get; init; }
+
+	public string[] RowStyleNames { get; init; } = Array.Empty<string>();
 }
 
 internal sealed class RunWorkbookResponse
@@ -607,3 +617,5 @@ internal sealed class WorkbookImportResponse
 }
 
 internal readonly record struct WorkbookRefreshData(string ConnectionStringTemplate, string SqlScript);
+
+public partial class Program;
