@@ -1,200 +1,238 @@
 # Query2Excel
 
+A utility for exporting data via SQL directly into Excel, with support for formatting via metadata.
+
+![Query2Excel Studio Main UI](Screenshots/MainUI.png)
+Main UI where you provide credentials, enter SQL, and generate the workbook.
+
+![Generated Output Worksheet](Screenshots/Output%20Worksheet.png)
+Example output worksheet showing query results rendered into formatted Excel tables.
+
+![Generated SQL Worksheet](Screenshots/SQL%20Worksheet.png)
+Companion SQL worksheet capturing execution details, SQL text, and sanitized connection template.
+
+## Quickstart
+
+Use this path to get running fast on Windows.
+
+1. Prerequisite: install .NET 8 SDK.
+
+2. Set web credentials in User Secrets:
+
+```powershell
+dotnet user-secrets --project .\Query2Excel.Web set "Query2ExcelWeb:DatabaseUserId" "YOUR_USER_ID"
+dotnet user-secrets --project .\Query2Excel.Web set "Query2ExcelWeb:DatabasePassword" "YOUR_PASSWORD"
+dotnet user-secrets --project .\Query2Excel.Web set "Query2ExcelWeb:ConnectionStringTemplate" "Server=YOUR_SERVERNAME;Database=YOUR_DATABASENAME;User Id={UserId};Password={Password};TrustServerCertificate=True;"
+```
+
+3. Start the web app:
+
+```powershell
+.\launch-web.bat
+```
+
+4. In the browser:
+
+- Enter or confirm User Id, Password, and connection string template.
+- Paste SQL into SQL Script.
+- Click Generate Workbook.
+- Download starts automatically when output is a file name.
+
+Optional health check:
+
+```powershell
+dotnet build .\Query2Excel.sln
+dotnet test .\Query2Excel.sln
+```
+
+## What You Get
+
+- Browser-based SQL to Excel generation using the same Core engine as the console app.
+- Metadata-driven worksheet naming/layout and append behavior.
+- SQL worksheet with execution details and credential-safe connection template.
+- Workbook reload workflow from existing Query2Excel output.
+
 ## Solution Layout
 
-- Query2Excel.Core
-  - Shared business logic, contracts, models, SQL execution, and workbook generation.
-- Query2Excel.App
-  - Console host for script-driven/local automation workflows.
-- Query2Excel.Web
-  - Browser-based frontend host that uses the same Core services.
-- Query2Excel.Tests
-  - Unit tests for Core behavior.
+- Query2Excel.Core: Shared business logic, contracts, SQL execution, metadata parsing, and workbook generation.
+- Query2Excel.App: Console host for script-driven/local automation workflows.
+- Query2Excel.Web: Browser host that uses the same Core services.
+- Query2Excel.Tests: Unit tests covering Core and host validation behavior.
+
+## Build And Test
+
+```powershell
+dotnet build .\Query2Excel.sln
+dotnet test .\Query2Excel.sln
+```
 
 ## Running Hosts
 
-- Console host:
+Fastest Windows path:
+
+```powershell
+.\launch-web.bat
+```
+
+Direct host commands:
+
+Console host:
 
 ```powershell
 dotnet run --project .\Query2Excel.App
 ```
 
-Alternative (from inside the app folder):
-
-```powershell
-Set-Location .\Query2Excel.App
-dotnet run
-```
-
-- Web host:
+Web host:
 
 ```powershell
 dotnet run --project .\Query2Excel.Web
 ```
 
-Then open the printed local URL in your browser and use the form to generate/download a workbook.
+Then open the printed local URL and use the form to generate a workbook.
 
-## SQL Script Configuration
+Launcher details:
 
-`Query2Excel:SqlScript` points to a `.sql` file that can contain multiline SQL and multiple statements.
+- Resolves the web project path from the repository root.
+- Verifies `dotnet` is available on `PATH`.
+- Starts `Query2Excel.Web` with `dotnet run`.
+- Forwards any extra arguments to the web host.
 
-Default value in `appsettings.json`:
+Example with forwarded arguments:
+
+```powershell
+.\launch-web.bat --urls http://localhost:5099
+```
+
+## Console Configuration
+
+Primary configuration section: `Query2Excel`
+
+- `ConnectionString`
+- `ConnectionStringTemplate`
+- `DatabaseUserId`
+- `DatabasePassword`
+- `SqlScript`
+- `OutputFilePath`
+- `CommandTimeoutSeconds`
+
+Default SQL script path:
 
 ```json
 "SqlScript": "Query2Excel.App\\Scripts\\Example.sql"
 ```
 
-If the script returns multiple result sets, the workbook will contain:
+CLI options are also supported (`--help`):
 
-- `Output1` for result set 1
-- `Output2` for result set 2
-- Additional sheets (`Output3`, `Output4`, ...) for any remaining result sets
+- `--connectionString`
+- `--connectionStringTemplate`
+- `--databaseUserId`
+- `--databasePassword`
+- `--sqlScript`
+- `--outputFilePath`
+- `--commandTimeoutSeconds`
 
-The `SQL` worksheet still contains the exact executed script plus execution timestamp, duration, total rows, and total result set count.
+The console host accepts tokenized templates using either `{UserId}` / `{Password}` or `{{USER_ID}}` / `{{PASSWORD}}`.
 
-## Metadata Fieldset
+## Web Host Feature Set
 
-Query2Excel supports metadata result sets that control how the next output worksheet is rendered.
+- Generate and download `.xlsx` directly from the browser.
+- Optional explicit output path behavior:
+- If output is a simple file name, browser download is returned.
+- If output includes a path component, the server writes the workbook to that path.
+- Overwrite-safe save behavior for explicit paths: existing file is versioned as `file.xlsx1`, `file.xlsx2`, and so on.
+- Optional "Open generated workbook with default .xlsx app" behavior.
+- "Load Existing Workbook" workflow:
+- Upload a prior Query2Excel workbook.
+- Reads refresh data from SQL worksheet markers.
+- Repopulates connection template, SQL script, and output file name in the form.
+- SQL editor metadata helper:
+- Right-click SQL Script and open "Metadata SELECT Builder".
+- Insert or update metadata `SELECT` statements in-place.
 
-### How metadata is recognized
+## Workbook Output Behavior
 
-A result set is treated as metadata when all of the following are true:
+If a query returns multiple data result sets:
+
+- Result set 1 -> `Output1`
+- Result set 2 -> `Output2`
+- Additional sets -> `Output3`, `Output4`, and so on
+
+Workbook always includes an `SQL` worksheet with:
+
+- Execution timestamp (UTC)
+- Execution duration (ms)
+- Total rows returned
+- Result set count
+- Connection string template (credentials masked)
+- Executed SQL text
+
+## Metadata Result Sets
+
+Metadata controls how the immediately following data result set is rendered.
+
+A result set is treated as metadata only when:
 
 - It has exactly 1 row.
-- It has one or more columns.
+- It has at least 1 column.
 - Every column name is a recognized metadata field.
 
-If any column is unrecognized, the result set is treated as a normal output table.
+Recognized metadata fields:
 
-### Supported metadata fields
+- `__SheetName`: Rename the next output sheet.
+- `__Title`: Add a title row above the next table.
+- `__Description`: Add a description row above the next table.
+- `__AppendBelowPreviousTable`: Append next table below previous table on the same sheet (`true/false`, `1/0`, `yes/no`, `on/off`).
+- `__RowFormatColumn`: Name of a style-indicator column in the next data result set.
 
-- __SheetName
-  - Optional
-  - Overrides the default worksheet name for the next output result set.
-  - If omitted, default naming is Output1, Output2, and so on.
+Rules:
 
-- __Title
-  - Optional
-  - Inserts a title line above the table.
-  - Styled as a worksheet heading.
+- Metadata applies only to the next data result set.
+- Metadata result sets are consumed and not emitted as output sheets.
+- `__SheetName` cannot be combined with `__AppendBelowPreviousTable`.
+- If `__RowFormatColumn` is provided but the named column does not exist in the next result set, workbook generation fails.
 
-- __Description
-  - Optional
-  - Inserts a descriptive line between title and table, or above the table when no title is provided.
+Layout rules for title/description:
 
-- __AppendBelowPreviousTable
-  - Optional
-  - Boolean-like flag (`true/false`, `1/0`, `yes/no`, `on/off`).
-  - When true, places the next table directly below the previous output table on the same worksheet.
-  - The worksheet keeps the freeze/header lock from the first table section; it is not re-frozen for the appended section.
+- `__Title` + `__Description`: title at `A1`, description at `A2`, headers begin at `A3`.
+- `__Title` only: title at `A1`, headers begin at `A2`.
+- `__Description` only: description at `A1`, headers begin at `A2`.
+- Neither: headers begin at `A1`.
 
-### Row placement rules
+## Row Style Configuration
 
-- If __Title and __Description are both present:
-  - A1 = title
-  - A2 = description
-  - Table header starts at A3
+Row style definitions are configuration-driven via:
 
-- If only __Title is present:
-  - A1 = title
-  - Table header starts at A2
+- `config/Query2Excel.RowStyles.json`
 
-- If only __Description is present:
-  - A1 = description
-  - Table header starts at A2
+Both hosts load this file at startup. Style names are normalized (case-insensitive and tolerant of spaces, hyphens, and underscores), so names such as `Accent 1`, `accent_1`, and `ACCENT-1` map to the configured `Accent1` style.
 
-- If neither is present:
-  - Table header starts at A1
+When `__RowFormatColumn` is used:
 
-### Metadata scope
+- The style column is used for formatting and excluded from worksheet output.
+- Style value `Normal` (or empty) keeps default table formatting.
 
-- Metadata always applies to the immediately following data result set.
-- Metadata result sets are consumed and are not emitted as output worksheets.
+## Secrets And Credential Handling
 
-### Autosizing behavior
+Use .NET User Secrets to protect credentials.
 
-- Table column auto-fit uses only the table header/data region.
-- Long __Title or __Description values do not affect table column widths.
-
-### Example
-
-```sql
-SELECT __SheetName = 'Objects',
-       __Title = 'List of Objects',
-       __Description = 'This query returns a list of all objects in the database, including tables, views, and stored procedures.';
-EXEC sp_find;
-
-SELECT __Description = 'This query returns a list of currently active users and their processes.',
-       __AppendBelowPreviousTable = 1;
-EXEC sp_who2;
-```
-
-Expected workbook output:
-
-- Worksheet 1: Objects
-  - A1 title, A2 description, table begins at A3
-  - Second table is appended directly below the first table in the same worksheet.
-
-## Local Secret Setup (Connection String)
-
-This project uses .NET User Secrets so database credentials are not stored in source control.
-
-### Project Configuration
-
-- Project file: Query2Excel.App/Query2Excel.App.csproj
-- UserSecretsId: query2excel-89aa31cd-b4bc-4f7c-a2f3-5fc7e6117f18
-- Secret key used by the app: ConnectionStrings:Query2Excel
-
-### Set the Secret (exact command)
-
-Run from the repository root:
+Console project secrets:
 
 ```powershell
 dotnet user-secrets --project .\Query2Excel.App set "ConnectionStrings:Query2Excel" "Server=localhost;Database=CDMSandbox;User Id=YOUR_USER_ID;Password=YOUR_PASSWORD;TrustServerCertificate=True;"
-```
-
-### Verify the Secret
-
-```powershell
 dotnet user-secrets --project .\Query2Excel.App list
 ```
 
-You should see a value for `ConnectionStrings:Query2Excel`.
-
-### Where It Is Stored (Windows)
-
-User Secrets are stored per-user outside the repository:
-
-- `%APPDATA%\Microsoft\UserSecrets\<UserSecretsId>\secrets.json`
-- Example for this project:
-  `C:\Users\NickAllan\AppData\Roaming\Microsoft\UserSecrets\query2excel-89aa31cd-b4bc-4f7c-a2f3-5fc7e6117f18\secrets.json`
-
-### Notes
-
-- Keep `Query2Excel.App/appsettings.json` checked in with `"ConnectionString": ""`.
-- Do not commit plaintext credentials.
-- For CI/production, prefer environment variables or Azure Key Vault.
-
-## Web Host Credential Security
-
-For `Query2Excel.Web`, keep `User Id` and `Password` out of the browser input.
-
-Use a tokenized template:
-
-```text
-Server=localhost;Database=CDMSandbox;User Id={{USER_ID}};Password={{PASSWORD}};TrustServerCertificate=True;
-```
-
-Then store credentials in User Secrets for the web project:
+Web project secrets:
 
 ```powershell
 dotnet user-secrets --project .\Query2Excel.Web set "Query2ExcelWeb:DatabaseUserId" "YOUR_USER_ID"
 dotnet user-secrets --project .\Query2Excel.Web set "Query2ExcelWeb:DatabasePassword" "YOUR_PASSWORD"
+dotnet user-secrets --project .\Query2Excel.Web set "Query2ExcelWeb:ConnectionStringTemplate" "Server=localhost;Database=CDMSandbox;User Id={UserId};Password={Password};TrustServerCertificate=True;"
 dotnet user-secrets --project .\Query2Excel.Web list
 ```
 
-Optional: store the template in configuration so users do not have to type it each run:
+Notes:
 
-```powershell
-dotnet user-secrets --project .\Query2Excel.Web set "Query2ExcelWeb:ConnectionStringTemplate" "Server=localhost;Database=CDMSandbox;User Id={{USER_ID}};Password={{PASSWORD}};TrustServerCertificate=True;"
-```
+- The web host can persist provided template/user/password values into its User Secrets file for future runs.
+- Workbook SQL sheet stores a sanitized template representation (credential values replaced with tokens).
+- Keep `Query2Excel.App/appsettings.json` checked in with empty `ConnectionString`.
