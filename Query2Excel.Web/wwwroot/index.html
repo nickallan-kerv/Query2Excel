@@ -256,7 +256,7 @@
       border-radius: 10px;
       background: #fff;
       box-shadow: 0 12px 28px rgba(9, 23, 30, 0.24);
-      overflow: hidden;
+      overflow: visible;
       display: none;
     }
 
@@ -280,6 +280,41 @@
       transform: none;
       filter: none;
       background: #f7f2e8;
+    }
+
+    .context-submenu-wrapper {
+      position: relative;
+    }
+
+    .context-submenu {
+      position: absolute;
+      top: 0;
+      left: 100%;
+      min-width: 190px;
+      border: 1px solid #bcc6cc;
+      border-radius: 10px;
+      background: #fff;
+      box-shadow: 0 12px 28px rgba(9, 23, 30, 0.24);
+      overflow-x: hidden;
+      overflow-y: auto;
+      max-height: 320px;
+      display: none;
+      z-index: 91;
+    }
+
+    .context-submenu button:disabled {
+      cursor: not-allowed;
+      opacity: 0.7;
+    }
+
+    .context-submenu-wrapper:hover .context-submenu,
+    .context-submenu-wrapper:focus-within .context-submenu {
+      display: block;
+    }
+
+    .context-menu.submenu-open-left .context-submenu {
+      left: auto;
+      right: 100%;
     }
 
     .modal-backdrop {
@@ -368,7 +403,7 @@
   <main class="shell">
     <header class="header">
       <h1 class="title">Query2Excel Studio</h1>
-      <p class="sub">Run SQL and download workbook output from your browser while preserving the same Core engine as the console app.</p>
+      <p class="sub">A utility for exporting data via SQL directly into Excel, with support for formatting via metadata.</p>
     </header>
 
     <section class="body">
@@ -390,7 +425,7 @@
         </div>
 
         <div style="margin-top: 12px;">
-          <label for="sqlScript">SQL Script</label>
+          <label for="sqlScript">SQL Script (right-click to construct metadata)</label>
           <textarea id="sqlScript" name="sqlScript" placeholder="SELECT __SheetName = 'Objects';&#10;EXEC sp_find;"></textarea>
         </div>
 
@@ -426,6 +461,10 @@
 
   <div id="sqlContextMenu" class="context-menu" role="menu" aria-hidden="true">
     <button id="openMetadataBuilder" type="button" role="menuitem">Metadata SELECT Builder</button>
+    <div class="context-submenu-wrapper">
+      <button id="openInsertRowStyleMenu" type="button" role="menuitem" aria-haspopup="true" aria-expanded="false">Insert RowStyle ▸</button>
+      <div id="insertRowStyleSubmenu" class="context-submenu" role="menu" aria-hidden="true"></div>
+    </div>
   </div>
 
   <div id="metadataModalBackdrop" class="modal-backdrop" aria-hidden="true">
@@ -469,6 +508,7 @@
     </div>
   </div>
 
+  <script src="/scripts/query2excel-web-utils.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/sql/sql.min.js"></script>
   <script>
@@ -480,6 +520,9 @@
     const storageKey = 'query2excel-web-form-nonsecret';
     const sqlContextMenu = document.getElementById('sqlContextMenu');
     const openMetadataBuilderButton = document.getElementById('openMetadataBuilder');
+    const openInsertRowStyleMenuButton = document.getElementById('openInsertRowStyleMenu');
+    const insertRowStyleSubmenu = document.getElementById('insertRowStyleSubmenu');
+    const rowStyleSubmenuWrapper = sqlContextMenu.querySelector('.context-submenu-wrapper');
     const metadataModalBackdrop = document.getElementById('metadataModalBackdrop');
     const metadataModeHint = document.getElementById('metadataModeHint');
     const metadataModalStatus = document.getElementById('metadataModalStatus');
@@ -491,10 +534,12 @@
     const metaAppendBelowInput = document.getElementById('metaAppendBelow');
     const metaRowFormatColumnEnabledInput = document.getElementById('metaRowFormatColumnEnabled');
     const metaRowFormatColumnInput = document.getElementById('metaRowFormatColumn');
+    const webUtils = window.Query2ExcelWebUtils || {};
     let sqlEditor = null;
     let pendingSqlContext = null;
     let contextMenuIgnoreUntil = 0;
     let activeStatementMarker = null;
+    let lastAutoSyncedMetadataTitle = '';
     const metadataSelectFields = new Set([
       '__sheetname',
       '__title',
@@ -505,6 +550,24 @@
 
     function updateRowFormatColumnInputState() {
       metaRowFormatColumnInput.disabled = !metaRowFormatColumnEnabledInput.checked;
+    }
+
+    function syncMetadataTitleFromSheetNameIfEmpty() {
+      const sheetName = metaSheetNameInput.value || '';
+      const currentTitle = metaTitleInput.value || '';
+      if (typeof webUtils.computeMetadataTitleSync !== 'function') {
+        const titleIsEmpty = currentTitle.trim().length === 0;
+        const titleIsLastAutoSyncedValue = currentTitle === lastAutoSyncedMetadataTitle;
+        if (titleIsEmpty || titleIsLastAutoSyncedValue) {
+          metaTitleInput.value = sheetName;
+          lastAutoSyncedMetadataTitle = sheetName;
+        }
+        return;
+      }
+
+      const syncResult = webUtils.computeMetadataTitleSync(sheetName, currentTitle, lastAutoSyncedMetadataTitle);
+      metaTitleInput.value = syncResult.title;
+      lastAutoSyncedMetadataTitle = syncResult.lastAutoSyncedTitle;
     }
 
     function getSqlScriptValue() {
@@ -537,6 +600,205 @@
       form.sqlScript.focus();
       form.sqlScript.selectionStart = index;
       form.sqlScript.selectionEnd = index;
+    }
+
+    function getSelectedSqlRange() {
+      if (sqlEditor && typeof sqlEditor.listSelections === 'function') {
+        const selections = sqlEditor.listSelections();
+        for (const selection of selections) {
+          const anchorIndex = sqlEditor.indexFromPos(selection.anchor);
+          const headIndex = sqlEditor.indexFromPos(selection.head);
+          if (anchorIndex === headIndex) {
+            continue;
+          }
+
+          return {
+            start: Math.min(anchorIndex, headIndex),
+            end: Math.max(anchorIndex, headIndex)
+          };
+        }
+
+        return null;
+      }
+
+      const start = typeof form.sqlScript.selectionStart === 'number' ? form.sqlScript.selectionStart : 0;
+      const end = typeof form.sqlScript.selectionEnd === 'number' ? form.sqlScript.selectionEnd : start;
+      if (end <= start) {
+        return null;
+      }
+
+      return { start, end };
+    }
+
+    function getHiddenElementDimensions(element) {
+      if (!element) {
+        return { width: 0, height: 0 };
+      }
+
+      if (element.offsetParent !== null) {
+        return { width: element.offsetWidth, height: element.offsetHeight };
+      }
+
+      const previousDisplay = element.style.display;
+      const previousVisibility = element.style.visibility;
+      const previousPointerEvents = element.style.pointerEvents;
+
+      element.style.visibility = 'hidden';
+      element.style.pointerEvents = 'none';
+      element.style.display = 'block';
+
+      const dimensions = {
+        width: element.offsetWidth,
+        height: element.offsetHeight
+      };
+
+      element.style.display = previousDisplay;
+      element.style.visibility = previousVisibility;
+      element.style.pointerEvents = previousPointerEvents;
+
+      return dimensions;
+    }
+
+    function updateRowStyleSubmenuLayout() {
+      if (!sqlContextMenu || !insertRowStyleSubmenu || !rowStyleSubmenuWrapper) {
+        return;
+      }
+
+      const menuRect = sqlContextMenu.getBoundingClientRect();
+      const wrapperRect = rowStyleSubmenuWrapper.getBoundingClientRect();
+      const dimensions = getHiddenElementDimensions(insertRowStyleSubmenu);
+      if (typeof webUtils.computeSubmenuLayout !== 'function') {
+        sqlContextMenu.classList.remove('submenu-open-left');
+        insertRowStyleSubmenu.style.top = '0px';
+        insertRowStyleSubmenu.style.maxHeight = '320px';
+        return;
+      }
+
+      const layout = webUtils.computeSubmenuLayout({
+        menuRight: menuRect.right,
+        wrapperTop: wrapperRect.top,
+        submenuWidth: dimensions.width || 190,
+        submenuHeight: dimensions.height || 0,
+        viewportWidth: window.innerWidth,
+        viewportHeight: window.innerHeight,
+        viewportPadding: 8,
+        minimumHeight: 120
+      });
+
+      sqlContextMenu.classList.toggle('submenu-open-left', layout.openLeft);
+      insertRowStyleSubmenu.style.top = `${layout.submenuTop}px`;
+      insertRowStyleSubmenu.style.maxHeight = `${layout.maxHeight}px`;
+    }
+
+    function insertTextAtSqlCursor(textToInsert) {
+      const insertText = textToInsert || '';
+      if (!insertText) {
+        return;
+      }
+
+      const selectedStart = pendingSqlContext && typeof pendingSqlContext.selectedStartIndex === 'number'
+        ? pendingSqlContext.selectedStartIndex
+        : null;
+      const selectedEnd = pendingSqlContext && typeof pendingSqlContext.selectedEndIndex === 'number'
+        ? pendingSqlContext.selectedEndIndex
+        : null;
+
+      const script = getSqlScriptValue();
+      const insertRange = typeof webUtils.computeInsertRange === 'function'
+        ? webUtils.computeInsertRange(script.length, pendingSqlContext && typeof pendingSqlContext.cursorIndex === 'number'
+          ? pendingSqlContext.cursorIndex
+          : getCursorIndex(), selectedStart, selectedEnd)
+        : null;
+      const replaceStart = insertRange ? insertRange.start : null;
+      const replaceEnd = insertRange ? insertRange.end : null;
+      const shouldReplaceSelection = !!(insertRange && insertRange.isReplace);
+
+      if (sqlEditor) {
+        if (shouldReplaceSelection) {
+          const from = sqlEditor.posFromIndex(replaceStart);
+          const to = sqlEditor.posFromIndex(replaceEnd);
+          sqlEditor.replaceRange(insertText, from, to, 'insert-rowstyle');
+          sqlEditor.setCursor(sqlEditor.posFromIndex(replaceStart + insertText.length));
+        } else {
+          const insertIndex = insertRange
+            ? insertRange.start
+            : (pendingSqlContext && typeof pendingSqlContext.cursorIndex === 'number'
+              ? pendingSqlContext.cursorIndex
+              : getCursorIndex());
+
+          const safeInsertIndex = Math.max(0, Math.min(insertIndex, script.length));
+          const at = sqlEditor.posFromIndex(safeInsertIndex);
+          sqlEditor.replaceRange(insertText, at, at, 'insert-rowstyle');
+          sqlEditor.setCursor(sqlEditor.posFromIndex(safeInsertIndex + insertText.length));
+        }
+
+        sqlEditor.focus();
+        saveState();
+        hideSqlContextMenu();
+        return;
+      }
+
+      if (shouldReplaceSelection) {
+        form.sqlScript.focus();
+        form.sqlScript.setRangeText(insertText, replaceStart, replaceEnd, 'end');
+        saveState();
+        hideSqlContextMenu();
+        return;
+      }
+
+      const insertIndex = pendingSqlContext && typeof pendingSqlContext.cursorIndex === 'number'
+        ? pendingSqlContext.cursorIndex
+        : getCursorIndex();
+
+      const safeInsertIndex = Math.max(0, Math.min(insertIndex, script.length));
+      form.sqlScript.focus();
+      form.sqlScript.setRangeText(insertText, safeInsertIndex, safeInsertIndex, 'end');
+      saveState();
+      hideSqlContextMenu();
+    }
+
+    function normalizeRowStyleNames(rawNames) {
+      if (typeof webUtils.normalizeRowStyleNames === 'function') {
+        return webUtils.normalizeRowStyleNames(rawNames);
+      }
+
+      return [];
+    }
+
+    function renderRowStyleMenu(rawStyleNames) {
+      if (!insertRowStyleSubmenu || !openInsertRowStyleMenuButton) {
+        return;
+      }
+
+      insertRowStyleSubmenu.replaceChildren();
+      const rowStyleNames = normalizeRowStyleNames(rawStyleNames);
+      const hasStyles = rowStyleNames.length > 0;
+
+      openInsertRowStyleMenuButton.disabled = !hasStyles;
+      openInsertRowStyleMenuButton.setAttribute('aria-expanded', hasStyles ? 'true' : 'false');
+      insertRowStyleSubmenu.setAttribute('aria-hidden', hasStyles ? 'false' : 'true');
+
+      if (!hasStyles) {
+        const emptyButton = document.createElement('button');
+        emptyButton.type = 'button';
+        emptyButton.disabled = true;
+        emptyButton.textContent = 'No RowStyles configured';
+        insertRowStyleSubmenu.appendChild(emptyButton);
+        return;
+      }
+
+      for (const rowStyleName of rowStyleNames) {
+        const styleButton = document.createElement('button');
+        styleButton.type = 'button';
+        styleButton.role = 'menuitem';
+        styleButton.textContent = rowStyleName;
+        styleButton.addEventListener('click', () => {
+          insertTextAtSqlCursor(rowStyleName);
+        });
+        insertRowStyleSubmenu.appendChild(styleButton);
+      }
+
+      updateRowStyleSubmenuLayout();
     }
 
     function insertTabCharacterIntoTextarea(textarea) {
@@ -630,6 +892,11 @@
     }
 
     function resolveMetadataTargetContext(context, script) {
+      const selectionContext = {
+        selectedStartIndex: typeof context.selectedStartIndex === 'number' ? context.selectedStartIndex : null,
+        selectedEndIndex: typeof context.selectedEndIndex === 'number' ? context.selectedEndIndex : null
+      };
+
       const currentStatement = {
         start: context.statementStart,
         end: context.statementEnd,
@@ -639,6 +906,7 @@
       if (isMetadataSelectStatement(currentStatement.text)) {
         return {
           cursorIndex: context.cursorIndex,
+          ...selectionContext,
           statementStart: currentStatement.start,
           statementEnd: currentStatement.end,
           statementText: currentStatement.text,
@@ -656,6 +924,7 @@
         if (isMetadataSelectStatement(previousStatement.text)) {
           return {
             cursorIndex: context.cursorIndex,
+            ...selectionContext,
             statementStart: previousStatement.start,
             statementEnd: previousStatement.end,
             statementText: previousStatement.text,
@@ -667,6 +936,7 @@
 
       return {
         cursorIndex: context.cursorIndex,
+        ...selectionContext,
         statementStart: currentStatement.start,
         statementEnd: currentStatement.end,
         statementText: currentStatement.text,
@@ -904,6 +1174,7 @@
 
       sqlContextMenu.style.left = `${Math.max(8, clampedX)}px`;
       sqlContextMenu.style.top = `${Math.max(8, clampedY)}px`;
+      updateRowStyleSubmenuLayout();
       contextMenuIgnoreUntil = Date.now() + 220;
     }
 
@@ -930,6 +1201,7 @@
         applyMetadataModalButton.textContent = 'Update Metadata SELECT';
         metaSheetNameInput.value = parsed.sheetName;
         metaTitleInput.value = parsed.title;
+        lastAutoSyncedMetadataTitle = '';
         metaDescriptionInput.value = parsed.description;
         metaAppendBelowInput.checked = parsed.appendBelowPreviousTable;
         metaRowFormatColumnEnabledInput.checked = !(!(parsed.rowFormatColumn || '').trim());
@@ -941,6 +1213,7 @@
         applyMetadataModalButton.textContent = 'Insert Metadata SELECT';
         metaSheetNameInput.value = '';
         metaTitleInput.value = '';
+        lastAutoSyncedMetadataTitle = '';
         metaDescriptionInput.value = '';
         metaAppendBelowInput.checked = false;
         metaRowFormatColumnEnabledInput.checked = false;
@@ -1050,9 +1323,12 @@
         const cursorIndex = sqlEditor.indexFromPos(cursor);
         const script = getSqlScriptValue();
         const bounds = findStatementBounds(script, cursorIndex);
+        const selectedRange = getSelectedSqlRange();
 
         const resolvedContext = resolveMetadataTargetContext({
           cursorIndex,
+          selectedStartIndex: selectedRange ? selectedRange.start : null,
+          selectedEndIndex: selectedRange ? selectedRange.end : null,
           statementStart: bounds.start,
           statementEnd: bounds.end,
           statementText: script.slice(bounds.start, bounds.end),
@@ -1180,8 +1456,11 @@
         if (typeof settings.commandTimeoutSeconds === 'number' && settings.commandTimeoutSeconds > 0 && !form.commandTimeoutSeconds.value) {
           form.commandTimeoutSeconds.value = String(settings.commandTimeoutSeconds);
         }
+
+        renderRowStyleMenu(settings.rowStyleNames);
       } catch {
         // Ignore settings bootstrap failures and let users fill the form.
+        renderRowStyleMenu([]);
       }
     }
 
@@ -1273,6 +1552,16 @@
       }
     });
 
+    metaSheetNameInput.addEventListener('input', () => {
+      syncMetadataTitleFromSheetNameIfEmpty();
+    });
+
+    metaTitleInput.addEventListener('input', () => {
+      if (metaTitleInput.value !== lastAutoSyncedMetadataTitle) {
+        lastAutoSyncedMetadataTitle = '';
+      }
+    });
+
     document.addEventListener('pointerdown', (event) => {
       if (Date.now() <= contextMenuIgnoreUntil) {
         return;
@@ -1302,8 +1591,15 @@
       }
     });
 
+    window.addEventListener('resize', () => {
+      if (sqlContextMenu.style.display === 'block') {
+        updateRowStyleSubmenuLayout();
+      }
+    });
+
     initializeSqlEditor();
     updateRowFormatColumnInputState();
+    renderRowStyleMenu([]);
 
     if (!sqlEditor) {
       form.sqlScript.addEventListener('keydown', (event) => {
@@ -1323,9 +1619,12 @@
         const cursorIndex = typeof form.sqlScript.selectionStart === 'number' ? form.sqlScript.selectionStart : 0;
         const script = getSqlScriptValue();
         const bounds = findStatementBounds(script, cursorIndex);
+        const selectedRange = getSelectedSqlRange();
 
         const resolvedContext = resolveMetadataTargetContext({
           cursorIndex,
+          selectedStartIndex: selectedRange ? selectedRange.start : null,
+          selectedEndIndex: selectedRange ? selectedRange.end : null,
           statementStart: bounds.start,
           statementEnd: bounds.end,
           statementText: script.slice(bounds.start, bounds.end),
